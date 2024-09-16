@@ -1,11 +1,9 @@
-'Itaipu Parquetec'
 import math
 
 from mafpll import MAF_PLL
 from park_transform import ParkTransform
 
-'Author: Gabriel Sgarbossa'
-'Programa para implementação de um MAF-PLL para estimação de frequência e ângulo de fase'
+
 
 
 import comtrade as ct
