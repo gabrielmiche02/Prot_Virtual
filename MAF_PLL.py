@@ -1,4 +1,9 @@
 'Itaipu Parquetec'
+import math
+
+from mafpll import MAF_PLL
+from park_transform import ParkTransform
+
 'Author: Gabriel Sgarbossa'
 'Programa para implementação de um MAF-PLL para estimação de frequência e ângulo de fase'
 
@@ -8,144 +13,71 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+comtrade_path = "C:/Users/guilherme.zat/Downloads/"
 
+Vbase = 500000 / math.sqrt(3) * math.sqrt(2)
 
-
-#___________________________________________________________________________________________
-#Funções
-
-# def abc_to_dq0 (a, b, c, omega, theta, t):
-    
-#     d = (2/3) * (a*np.cos(omega * t + theta) 
-#                  + b*np.cos(omega * t - 2*np.pi/3 + theta) 
-#                  + c*np.cos(omega * t + 2*np.pi/3 + theta))
-    
-#     q = (2/3) * (a*np.sin(omega * t + theta) 
-#                  + b*np.sin(omega * t - 2*np.pi/3 + theta) 
-#                  + c*np.sin(omega * t + 2*np.pi/3 + theta))
-    
-#     z = (2/3) * (a + b + c)/2
-
-#     return d, q, z
-
-# def abc_to_dq0 (a, b, c, omega, theta, t):
-    
-#     d = (2/3) * (a*np.cos(omega * t ) 
-#                  + b*np.cos(omega * t - 2*np.pi/3 ) 
-#                  + c*np.cos(omega * t + 2*np.pi/3 ))
-    
-#     q = (2/3) * (a*np.sin(omega * t + theta) 
-#                  + b*np.sin(omega * t - 2*np.pi/3 ) 
-#                  + c*np.sin(omega * t + 2*np.pi/3 ))
-    
-#     z = (2/3) * (a + b + c)/2
-
-#     return d, q, z
-
-def abc_to_dq0 (a, b, c, omega, theta, t):
-    
-    d = (2/3) * (a*np.cos( theta ) 
-                 + b*np.cos( theta - 2*np.pi/3 ) 
-                 + c*np.cos( theta + 2*np.pi/3 ))
-    
-    q = (2/3) * (-a*np.sin(theta) 
-                 - b*np.sin( theta - 2*np.pi/3 ) 
-                 - c*np.sin( theta + 2*np.pi/3 ))
-    
-    z = (2/3) * (a + b + c)/2
-
-    return d, q, z
-
-
-
-def maf_filter (u):
-    if len(u) < 256:
-        return u
-    else:
-        y = sum(u)/256
-        u[-1] = y
-    return u
-
-
-
-
-#___________________________________________________________________________________________
-#Constantes iniciais
-theta = 0                                                                                                  #Ângulo de fase inicial
-wf = w0 = 2*np.pi*50                                                                                       #Frequência de referência
-VD = []
-VQ = []
-Int = 0
-
-teste = []
-
-
-
-rec = ct.load("Comtrade/TesteASCII_Caso_0001_S.cfg","Comtrade/TesteASCII_Caso_0001_S.dat")                  #Carrega o arquivo comtrade
+rec = ct.load(comtrade_path + "TesteASCII_Caso_0001_S.cfg", comtrade_path + "TesteASCII_Caso_0001_S.dat")                  #Carrega o arquivo comtrade
 df = rec.to_dataframe()                                                                                     #Cria um dataframe com os registros de todos os canais
-Va = df['CA00 - VA00']                                                                                      #Tensao Va
-Vb = df['CA01 - VB00']                                                                                      #Tensao Vb
-Vc = df['CA02 - VC00']                                                                                      #Tensao Vc
+Va = np.array(rec.analog[4]) / Vbase                                                                                   #Tensao Va
+Vb = np.array(rec.analog[5]) / Vbase                                                                                      #Tensao Vb
+Vc = np.array(rec.analog[6]) / Vbase                                                                                       #Tensao Vc
+time = np.array(rec.time)
 
+plt.figure()
+plt.plot(time, Va, label="Va")
+plt.plot(time, Vb, label="Vb")
+plt.plot(time, Vc, label="Vc")
+plt.title('Tensões Va, Vb, Vc')
+plt.xlabel('Tempo [s]')
+plt.ylabel('Tensão [V]')
+plt.legend()
+plt.grid(True)
+plt.show()
 
+dt = time[1] - time[0]
+print(dt)
+pll = MAF_PLL(window_size=8, nominal_frequency=50, dt=dt)
 
+Vd = np.zeros_like(time)
+Vq = np.zeros_like(time)
+Vz = np.zeros_like(time)
+theta = np.zeros_like(time)
+pll_omega_freq = np.zeros_like(time)
 
-
-
-for i in range(0, len(df)):
-
-    Vd, Vq, Vz = abc_to_dq0(Va.iloc[i], Vb.iloc[i], Vc.iloc[i], w0, theta, Va.index[i])                      #Calcula as componentes dq0
-
-    
-    if len(VD) < 256:
-            VD.append(Vd)
-            VQ.append(Vq)
+for i in range(len(time)):
+    if i == 0:
+        Vd[i], Vq[i], Vz[i] = ParkTransform.abc_to_dq0(Va[i], Vb[i], Vc[i], 0)
     else:
-            VD.pop(0)
-            VQ.pop(0)
-            VD.append(Vd)
-            VQ.append(Vq)
-
-            Vd_maf = maf_filter(VD)                                                                           #Aplica o filtro MAF
-            Vq_maf = maf_filter(VQ)                                                                           #Aplica o filtro MAF
-
-            In_PI = Vq_maf[-1]                                                                     
-            
-            Prop = In_PI * 50
-            Int = Int + In_PI * 20/(12800)
-
-            w0 = wf + Int 
-            
-
-            theta = theta + w0 + Prop
-            teste.append(Vq)
-
-            print(theta, w0, Vq_maf[-1], VQ[-1], In_PI)
-   
-                                                                          
+        Vd[i], Vq[i], Vz[i] = ParkTransform.abc_to_dq0(Va[i], Vb[i], Vc[i], theta[i-1])
+    pll_omega_freq[i], theta[i] = pll.calculate(Vd[i], Vq[i])
 
 
+plt.figure()
+plt.plot(time, Vd, label="Vd")
+plt.plot(time, Vq, label="Vq")
+plt.plot(time, Vz, label="Vz")
+plt.title('Tensões Vd, Vq, Vz')
+plt.xlabel('Tempo [s]')
+plt.ylabel('Tensão [V]')
+plt.legend()
+plt.grid(True)
+plt.show()
 
+plt.figure()
+plt.plot(time, pll_omega_freq, label="omega")
+plt.title('Frequency')
+plt.xlabel('Tempo [s]')
+plt.ylabel('Frequency [rad/s]')
+plt.legend()
+plt.grid(True)
+plt.show()
 
-
-
-
-
-
-
-
-
-#___________________________________________________________________________
-#extras - desconsiderar
-# plt.plot(teste)
-plt.plot(teste)
-
-# # # plt.plot(Vz, label='Vz')
-# Vd, Vq, Vz = abc_to_dq0(Va, Vb, Vc, wf, theta)                                                                           
-
-# plt.plot(Vd)
-# plt.plot(Vq)
-# plt.legend(['Vd','Vq'])
-
-
-# plt.xlim([0,0.1])
+plt.figure()
+plt.plot(time, theta, label="Theta")
+plt.title('Theta')
+plt.xlabel('Tempo [s]')
+plt.ylabel('Theta [rad]')
+plt.legend()
+plt.grid(True)
+plt.show()
