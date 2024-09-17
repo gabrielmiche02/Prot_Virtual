@@ -6,8 +6,8 @@ class SRF_PLL:
         self.nominal_omega_frequency = nominal_frequency * 2 * np.pi
         self.pll_omega_frequency = 0
         self.dt = dt
-        self.proportional_gain = 50
-        self.integrator_gain = 70
+        self.proportional_gain = 100
+        self.integrator_gain = 20
         self.output_proportional = 0
         self.output_integrator = 0
         self.theta = 0
